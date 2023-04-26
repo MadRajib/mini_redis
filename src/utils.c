@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <stdio.h>
+#include <fcntl.h>
 
 int read_full(int fd, char *buf,size_t n) {
     while (n > 0) {
@@ -37,4 +38,13 @@ int cerr(int ret){
     }
     return ret;
 
+}
+
+int set_fd_nblocking(int fd) {
+    int ret = fcntl(fd, F_SETFL, O_NONBLOCK); /*setting as nonblocking fd*/
+    if (ret < 0) {
+        fprintf(stderr, "Failed to set O_NONBLOCK");
+        return -1;
+    }
+    return 0;
 }

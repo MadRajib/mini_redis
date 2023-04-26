@@ -3,7 +3,7 @@ CLIENT_OBJ=client.o
 UTILS_OBJ=utils.o
 
 
-INCLUDE_DIR=include
+INCLUDE_DIR=include/
 SRC_DIR=src
 
 CFLAGS=-Wall -g -std=gnu11

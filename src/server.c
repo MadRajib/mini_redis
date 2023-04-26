@@ -12,14 +12,15 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include "utils.h"
+#include "list.h"
 
 #define MAX_EVENTS 10
 struct epoll_event ev, events[MAX_EVENTS];
 
 enum {
     STATE_REQ=0, /*while reading*/
-    STATE_RES=0, /*while writing*/
-    STATE_END=0, /*to delete connection*/
+    STATE_RES=1, /*while writing*/
+    STATE_END=2, /*to delete connection*/
 };
 
 typedef struct {
@@ -30,7 +31,10 @@ typedef struct {
     size_t wbuf_sent;
     uint8_t rbuf[LEN_SIZE + K_MAX_MSG];
     uint8_t wbuf[LEN_SIZE + K_MAX_MSG];
+    struct list_head node;
 } Conn_t;
+
+struct list_head conn_list = LIST_INIT(conn_list);
 
 static int process_request(int connfd){
     
@@ -63,6 +67,40 @@ static int process_request(int connfd){
     return write_full(connfd, wbuf, 4 + len);
 
 }
+
+static int accept_new_conn(int connfd){
+    
+    struct sockaddr_in client_addr = {};
+    socklen_t socklen = sizeof(client_addr);
+    int ret, fd;
+    Conn_t *con;
+
+    fd =  accept(connfd, (struct sockaddr *)&client_addr, &socklen);
+    if (fd < 0) {
+        fprintf(stderr,"error while accept %d\n", errno);
+        return -1;
+    }
+
+    ret = set_fd_nblocking(fd); /*setting as nonblocking fd*/
+    if (ret < 0) {
+        fprintf(stderr,"error while not able to set non blocking %d\n", errno);
+        close(fd);
+        return -1;
+    }
+
+    con = (Conn_t *)malloc(sizeof(Conn_t));
+
+    con->fd = fd;
+    con->state = STATE_REQ;
+    con->rbuf_size = 0;
+    con->wbuf_size = 0;
+    con->wbuf_sent = 0;
+
+    list_add(&conn_list, &con->node);
+
+    return 0;
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -82,11 +120,10 @@ int main(int argc, char **argv) {
     cerr(bind(fd, (const struct sockaddr *)&addr, sizeof(addr)));    
     cerr(listen(fd, SOMAXCONN));
 
-    ret = fcntl(fd, F_SETFL, O_NONBLOCK); /*setting as nonblocking fd*/
-    if (ret < 0) {
-        fprintf(stderr, "Failed to set O_NONBLOCK");
+
+    ret = set_fd_nblocking(fd); /*setting as nonblocking fd*/
+    if (ret < 0)
         goto ERROR;
-    }
 
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
