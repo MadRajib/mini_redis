@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -6,17 +7,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "./lib/utils.h"
-
-int cerr(int ret){
-
-    if (ret < 0) {
-        fprintf(stderr, "error: %d", errno);
-        exit(1);
-    }
-    return ret;
-
-}
+#include "utils.h"
 
 static void process_connection(int connfd){
     
@@ -90,9 +81,17 @@ int main(int argc, char **argv) {
     addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK);
 
     cerr(connect(fd, (const struct sockaddr *)&addr, sizeof(addr)));
-    process_connection(fd);
+    
+    // mutlitple requests
+    int32_t err = query(fd, "hello1");
+    if(err) goto L_DONE;
 
+    err = query(fd, "hello2");
+    if(err) goto L_DONE;
+
+    err = query(fd, "hello3");
+
+L_DONE:
     close(fd);
-
     return 0;
 }

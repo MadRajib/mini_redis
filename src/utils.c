@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <stdio.h>
 
 int read_full(int fd, char *buf,size_t n) {
     while (n > 0) {
@@ -28,3 +29,12 @@ int write_full(int fd, char *buf,size_t n) {
     return 0;
 }
 
+int cerr(int ret){
+
+    if (ret < 0) {
+        fprintf(stderr, "error: %d", errno);
+        exit(1);
+    }
+    return ret;
+
+}
