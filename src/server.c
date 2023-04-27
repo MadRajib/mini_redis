@@ -44,7 +44,10 @@ static int process_request(int connfd){
     pkt_t msg;
     
     ssize_t ret = read(connfd, rbuf, LEN_SIZE + K_MAX_MSG);
-    if (ret <= 0) return -1;
+    if (ret <= 0) {
+        fprintf(stderr, "reading 0 bytes\n");
+        return -1;
+    }
 
     memcpy(&msg.len, rbuf, LEN_SIZE);
 
@@ -98,7 +101,7 @@ static int accept_new_conn(int connfd){
 
     list_add(&conn_list, &con->node);
 
-    return 0;
+    return fd;
 }
 
 int main(int argc, char **argv) {
@@ -110,18 +113,18 @@ int main(int argc, char **argv) {
     int nfds, epollfd;
 
 
-    int fd = cerr(socket(AF_INET, SOCK_STREAM, 0));
-    cerr(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)));
+    int soc_fd = cerr(socket(AF_INET, SOCK_STREAM, 0));
+    cerr(setsockopt(soc_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)));
 
     addr.sin_family = AF_INET;
     addr.sin_port = ntohs(1234);
     addr.sin_addr.s_addr = ntohl(0);
 
-    cerr(bind(fd, (const struct sockaddr *)&addr, sizeof(addr)));    
-    cerr(listen(fd, SOMAXCONN));
+    cerr(bind(soc_fd, (const struct sockaddr *)&addr, sizeof(addr)));    
+    cerr(listen(soc_fd, SOMAXCONN));
 
 
-    ret = set_fd_nblocking(fd); /*setting as nonblocking fd*/
+    ret = set_fd_nblocking(soc_fd); /*setting as nonblocking fd*/
     if (ret < 0)
         goto ERROR;
 
@@ -132,9 +135,9 @@ int main(int argc, char **argv) {
     }
 
     ev.events = EPOLLIN;
-    ev.data.fd = fd;
+    ev.data.fd = soc_fd;
 
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, soc_fd, &ev) == -1) {
         fprintf(stderr, "epoll_ctl: listen_sock %d\n", errno);
         goto ERROR;
     }
@@ -150,44 +153,45 @@ int main(int argc, char **argv) {
         }
 
         for(int n=0; n < nfds; n++) {
-            if(events[n].data.fd == fd) {
-                int connfd =  accept(fd, (struct sockaddr *)&client_addr, &socklen);
+            if(events[n].data.fd == soc_fd) {
+                int connfd =  accept_new_conn(soc_fd);
                 if (connfd < 0)
                     continue;
                 printf("recived a connection using epoll\n");
-                ev.events = EPOLLIN | EPOLLET;
+                ev.events = EPOLLIN | EPOLLET | EPOLLERR;
                 ev.data.fd = connfd;
 
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) == -1) {
                     fprintf(stderr, "epoll_ctl: %d\n", errno);
                     close(connfd);
                     goto ERROR;
-                } 
-            }else {
-                ret = process_request(events[n].data.fd);
-                if (ret) break;
+                }
+            }else{
+
+                struct list_head *next;
+                struct list_head *item;
+                Conn_t *conn;
+                list_for_each_safe(item, next, &conn_list) {
+                    conn = container_of(item, Conn_t, node);
+                    if (conn->fd == events[n].data.fd) {
+                        //TODO
+                        
+                        printf("recived event : %d on fd %d\n", events[n].events , conn->fd);
+                        ret = process_request(events[n].data.fd);
+                        if (ret < 0) {
+                            printf("removing fd from the list\n");
+                            list_del(&conn->node);
+                            free(conn);
+                            conn = NULL;
+                        }
+                    }
+                }
+                
             }
-        }
-/*
-        struct sockaddr_in client_addr = {};
-        socklen_t socklen = sizeof(client_addr);
-        int connfd =  accept(fd, (struct sockaddr *)&client_addr, &socklen);
-        if (connfd < 0)
-            continue;
-        
-*/
-        /*Handle multiple request*/
-/*
-        while (1) {
-            ret = process_request(connfd);
-            if (ret) break;
-        }
-        close(connfd);
-*/
-    
+        }  
 
     }
 ERROR:
-    close(fd);
+    close(soc_fd);
     return 0;
 }
