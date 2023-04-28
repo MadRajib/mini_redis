@@ -111,6 +111,9 @@ int main(int argc, char **argv) {
     int ret;
     struct sockaddr_in addr = {};
     int nfds, epollfd;
+    struct list_head *next;
+    struct list_head *item;
+    Conn_t *conn;
 
 
     int soc_fd = cerr(socket(AF_INET, SOCK_STREAM, 0));
@@ -146,6 +149,25 @@ int main(int argc, char **argv) {
     socklen_t socklen = sizeof(client_addr);
 
     for(;;) {
+        
+        /*
+         * Change epoll event type based on reading or writing to !
+         */
+        item = NULL;
+        next = NULL;
+        conn = NULL;
+        list_for_each_safe(item, next, &conn_list) {
+            conn = container_of(item, Conn_t, node);
+            if (conn && (conn->fd > -1)) {
+                ev.events = (conn->state == STATE_REQ) ? EPOLLIN : EPOLLOUT | EPOLLET ;
+                ev.data.fd = conn->fd;
+                if (epoll_ctl(epollfd, EPOLL_CTL_MOD, conn->fd, &ev) == -1) {
+                    fprintf(stderr, "epoll_ctl:  EPOLL_CTL_MOD failed for fd:%d errno %d\n", conn->fd, errno);
+                }
+            }
+        }
+
+
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
             fprintf(stderr, "epoll_wait %d\n", errno);
@@ -153,6 +175,10 @@ int main(int argc, char **argv) {
         }
 
         for(int n=0; n < nfds; n++) {
+            /*
+            * Listen for new socket connection and register a new epoll event
+            * for the corresponding socket.
+            */
             if(events[n].data.fd == soc_fd) {
                 int connfd =  accept_new_conn(soc_fd);
                 if (connfd < 0)
@@ -166,12 +192,13 @@ int main(int argc, char **argv) {
                     close(connfd);
                     goto ERROR;
                 }
+    
             }else{
-
-                struct list_head *next;
-                struct list_head *item;
-                Conn_t *conn;
+                    item = NULL;
+                    next = NULL;
+                    conn = NULL;
                 list_for_each_safe(item, next, &conn_list) {
+
                     conn = container_of(item, Conn_t, node);
                     if (conn->fd == events[n].data.fd) {
                         //TODO
