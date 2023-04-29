@@ -16,7 +16,7 @@ typedef struct{
 } pkt_t;
 
 int read_full(int fd, char *buf,size_t n);
-int write_full(int fd, char *buf,size_t n);
+int write_full(int fd, unsigned char *buf,size_t n);
 int cerr(int ret);
 int set_fd_nblocking(int fd);
 

@@ -29,8 +29,8 @@ typedef struct {
     size_t rbuf_size;
     size_t wbuf_size;
     size_t wbuf_sent;
-    uint8_t rbuf[LEN_SIZE + K_MAX_MSG];
-    uint8_t wbuf[LEN_SIZE + K_MAX_MSG];
+    uint8_t rbuf[LEN_SIZE + K_MAX_MSG + 1];
+    uint8_t wbuf[LEN_SIZE + K_MAX_MSG + 1];
     struct list_head node;
 } Conn_t;
 
@@ -102,6 +102,66 @@ static int accept_new_conn(int connfd){
     list_add(&conn_list, &con->node);
 
     return fd;
+}
+
+void process_request_state(Conn_t *conn) { 
+    pkt_t req, resp;
+
+    ssize_t ret = read(conn->fd, conn->rbuf, LEN_SIZE + K_MAX_MSG + 1);
+    if (ret <= 0) {
+        fprintf(stderr, "reading 0 bytes\n");
+        conn->state = STATE_END;
+        return;
+    }
+
+    memcpy(&req.len, conn->rbuf, LEN_SIZE);
+
+    if(req.len > K_MAX_MSG) {
+        printf("Too long mgs %d\n", req.len);
+        return;
+    }
+
+    memcpy(&req.msg, conn->rbuf + LEN_SIZE, req.len);
+
+    req.msg[req.len] = '\0';
+    printf("client says: %s\n", req.msg);
+
+
+    const char reply[] = "world";
+    int len = (int)strlen(reply);
+    memcpy(conn->wbuf, &len, 4);
+    memcpy(conn->wbuf + 4, reply, len);
+    conn->wbuf_size = 4 + len;
+
+    conn->state = STATE_RES;
+
+    return;
+
+}
+
+void process_response_state(Conn_t *conn) { 
+    int ret;
+    ret = write_full(conn->fd, conn->wbuf, conn->wbuf_size);
+    if (ret < 0) {
+        printf("error writing to the fd %d errno:%d\n", conn->fd, errno);
+        //conn->state = STATE_END;
+    }
+     conn->state = STATE_REQ;
+
+    return;
+}
+
+void process_connection_io(Conn_t *conn){
+    switch (conn->state ){
+        case STATE_REQ:
+            process_request_state(conn);
+            break;
+        case STATE_RES:
+            process_response_state(conn);
+            break;
+        default:
+            assert(0);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -204,13 +264,14 @@ int main(int argc, char **argv) {
                         //TODO
                         
                         printf("recived event : %d on fd %d\n", events[n].events , conn->fd);
-                        ret = process_request(events[n].data.fd);
-                        if (ret < 0) {
+                        process_connection_io(conn);
+
+                        if ( conn->state == STATE_END ) {
                             printf("removing fd from the list\n");
                             list_del(&conn->node);
                             free(conn);
                             conn = NULL;
-                        }
+                        } 
                     }
                 }
                 

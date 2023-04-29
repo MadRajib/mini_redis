@@ -16,7 +16,7 @@ int read_full(int fd, char *buf,size_t n) {
     return 0;
 }
 
-int write_full(int fd, char *buf,size_t n) {
+int write_full(int fd, unsigned char  *buf,size_t n) {
     while (n > 0) {
         size_t wv = write(fd, buf, n);
         if (wv <= 0) return -1;
