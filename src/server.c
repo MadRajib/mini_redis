@@ -21,6 +21,10 @@ enum {
     STATE_REQ=0, /*while reading*/
     STATE_RES=1, /*while writing*/
     STATE_END=2, /*to delete connection*/
+
+    CMD_SET=0,
+    CMD_DEL=1,
+    CMD_GET=3,
 };
 
 typedef struct {
@@ -34,42 +38,15 @@ typedef struct {
     struct list_head node;
 } Conn_t;
 
+typedef struct {
+    uint32_t id;
+    uint8_t key[80];
+    uint8_t val[80];
+    struct list_head node;
+} db_item_t;
+
 struct list_head conn_list = LIST_INIT(conn_list);
-
-static int process_request(int connfd){
-    
-    //4 bytes header
-    char rbuf[LEN_SIZE + K_MAX_MSG + 1];
-    errno = 0;
-    pkt_t msg;
-    
-    ssize_t ret = read(connfd, rbuf, LEN_SIZE + K_MAX_MSG);
-    if (ret <= 0) {
-        fprintf(stderr, "reading 0 bytes\n");
-        return -1;
-    }
-
-    memcpy(&msg.len, rbuf, LEN_SIZE);
-
-    if(msg.len > K_MAX_MSG) {
-        printf("Too long mgs %d\n", msg.len);
-        return -1;
-    }
-
-    memcpy(&msg.msg, rbuf + LEN_SIZE, msg.len);
-
-    msg.msg[msg.len] = '\0';
-    printf("client says: %s\n", msg.msg);
-
-    const char reply[] = "world";
-    char wbuf[4 + sizeof(reply)];
-    int len = (int)strlen(reply);
-    memcpy(wbuf, &len, 4);
-    memcpy(&wbuf[4], reply, len);
-
-    return write_full(connfd, wbuf, 4 + len);
-
-}
+struct list_head in_mem_db = LIST_INIT(in_mem_db);
 
 static int accept_new_conn(int connfd){
     
@@ -102,6 +79,63 @@ static int accept_new_conn(int connfd){
     list_add(&conn_list, &con->node);
 
     return fd;
+}
+
+int c_io_err(int code) {
+    if (code <= 0)
+        fprintf(stderr, "reading 0 or less bytes erro: %d\n", errno);
+    return code;
+}
+
+#define MAX_CMD_IN_REQUEST 5
+
+/* code eg set del get , char key, val char*/
+typedef struct{
+    uint32_t cmd_code;
+
+
+
+}Cmd_t;
+
+void process_cmd(char *cmd_str) {
+    
+}
+
+void process_raw_data(Conn_t *conn) {
+    int ret;
+    uint8_t nstrs = 0; /* to store number of strings*/
+    uint8_t len = 0;  /* to store len of each string*/
+    uint8_t *ptr = NULL;
+    char data[80];
+
+    /*
+     * nstr : len1 : str1: len2: str2:.... :lenn: strn
+     */
+    ret = c_io_err(read(conn->fd, conn->rbuf, K_MAX_MSG));
+    if (ret <= 0) {
+        conn->state = STATE_END;
+        return;
+    }
+
+    ptr = conn->rbuf;
+    nstrs = *(uint8_t *)ptr;
+    assert(nstrs <= MAX_CMD_IN_REQUEST);
+    ptr += sizeof(uint8_t);
+
+    printf("Number of cmds : %d\n", nstrs);
+
+    for (int n = 0; n < nstrs; n++ ){
+        len = *(uint8_t *)ptr;
+        assert(len > 0);
+        ptr += sizeof(uint8_t);
+        memcpy(&data, ptr, len);
+        data[len] = '\0';
+        ptr += len;
+
+        printf("    sr: %d cmd :%s\n", n, data);
+    }
+
+    memset(conn->rbuf, 0, K_MAX_MSG);
 }
 
 void process_request_state(Conn_t *conn) { 
@@ -154,7 +188,8 @@ void process_response_state(Conn_t *conn) {
 void process_connection_io(Conn_t *conn){
     switch (conn->state ){
         case STATE_REQ:
-            process_request_state(conn);
+            process_raw_data(conn);
+            //process_request_state(conn);
             break;
         case STATE_RES:
             process_response_state(conn);
@@ -227,7 +262,9 @@ int main(int argc, char **argv) {
             }
         }
 
-
+        /*
+         * wait for events with the instance fd
+         */
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
             fprintf(stderr, "epoll_wait %d\n", errno);
@@ -254,9 +291,9 @@ int main(int argc, char **argv) {
                 }
     
             }else{
-                    item = NULL;
-                    next = NULL;
-                    conn = NULL;
+                item = NULL;
+                next = NULL;
+                conn = NULL;
                 list_for_each_safe(item, next, &conn_list) {
 
                     conn = container_of(item, Conn_t, node);
@@ -269,6 +306,7 @@ int main(int argc, char **argv) {
                         if ( conn->state == STATE_END ) {
                             printf("removing fd from the list\n");
                             list_del(&conn->node);
+                            close(conn->fd);
                             free(conn);
                             conn = NULL;
                         } 
