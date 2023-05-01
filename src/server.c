@@ -180,8 +180,23 @@ void get_from_db(uint32_t key) {
 }
 
 void del_from_db(uint32_t key) {
-    
+
     printf("%s\n",__func__);
+
+    struct list_head *item;
+    struct list_head *next;
+    db_item_t *db_item;
+
+
+    list_for_each_safe(item, next, &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        if (db_item->key == key) {
+            list_del(&db_item->node);
+            free(db_item);
+        }
+    }
+    
+    print_db_items();
 
 }
 
