@@ -148,8 +148,37 @@ ERROR:
     return NULL;
 }
 
-void process_cmd(char *cmd_str, size_t len) {
+void add_to_db(uint32_t key, uint32_t val) {
+
+}
+
+void get_from_db(uint32_t key) {
     
+}
+
+void del_from_db(uint32_t key) {
+
+}
+
+void mod_in_db(uint32_t key, uint32_t val) {
+
+}
+
+void process_cmd(Cmd_t *cmd) {
+
+   switch (cmd->cmd_code) {
+        case CMD_GET:
+            get_from_db(cmd->key);
+            break;
+        case CMD_SET:
+            add_to_db(cmd->key, cmd->value);
+            break;
+        case CMD_DEL:
+            del_from_db(cmd->key);
+            break;
+        default:
+            fprintf(stderr, "ERROR: Invalid cmd code %d", cmd->cmd_code);
+    } 
 }
 
 void process_raw_data(Conn_t *conn) {
@@ -158,6 +187,7 @@ void process_raw_data(Conn_t *conn) {
     uint8_t len = 0;  /* to store len of each string*/
     uint8_t *ptr = NULL;
     char data[80];
+    Cmd_t *cmd;
 
     /*
      * nstr : len1 : str1: len2: str2:.... :lenn: strn
@@ -184,7 +214,10 @@ void process_raw_data(Conn_t *conn) {
         ptr += len;
 
         printf("    sr: %d cmd :%s\n", n, data);
-        parse_cmd(data, len);
+        cmd = parse_cmd(data, len);
+        if (cmd != NULL) {
+            process_cmd(cmd);
+        }
     }
 
     memset(conn->rbuf, 0, K_MAX_MSG);
