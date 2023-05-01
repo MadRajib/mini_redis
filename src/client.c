@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
     
     // mutlitple requests
     char test[80];
-    strcpy(test, "set key1 val1;get key1;");
+    strcpy(test, "SET 1 12;GET 15;");
 
     int32_t err = send_cmds(fd, test);
     if(err) goto L_DONE;

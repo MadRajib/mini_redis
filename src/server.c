@@ -92,12 +92,63 @@ int c_io_err(int code) {
 /* code eg set del get , char key, val char*/
 typedef struct{
     uint32_t cmd_code;
-
-
-
+    uint32_t key;
+    uint32_t value;
 }Cmd_t;
 
-void process_cmd(char *cmd_str) {
+uint32_t get_cmd_code(char *code) {
+    if(strcmp(code, "GET")) 
+        return CMD_GET;
+    else if(strcmp(code, "DEL"))
+        return CMD_DEL;
+    else if(strcmp(code, "SET"))
+        return CMD_SET;
+    else 
+        return -1;
+}
+
+void print_cmd(Cmd_t *cmd){
+    printf("cmd : code:%d\n", cmd->cmd_code);
+    printf("cmd : key:%d\n", cmd->key);
+    printf("cmd : val:%d\n", cmd->value);
+}
+
+Cmd_t *parse_cmd(char *cmd_str, size_t len) {
+    char *cmd_ptr = NULL;
+    char *saveptr = NULL;
+    char *delim = " ";
+    Cmd_t *cmd = malloc(sizeof(Cmd_t));
+    int count = 0;
+    memset(cmd, 0, sizeof(Cmd_t));
+
+    cmd_ptr = strtok_r(cmd_str, delim, &saveptr);
+    while (cmd_ptr!= NULL) {
+        printf("%s\n", cmd_ptr);
+        switch(count) {
+            case 0:
+                cmd->cmd_code = get_cmd_code(cmd_ptr);
+                break;
+            case 1:
+                cmd->key = atoll(cmd_ptr);
+                break;
+            case 2:
+                cmd->value = atoll(cmd_ptr);
+                break;
+            default:
+                goto ERROR;
+        }
+        cmd_ptr = strtok_r(NULL, delim, &saveptr);
+        count++;
+    }
+    print_cmd(cmd);
+    return cmd;
+ERROR:
+    free(cmd);
+    cmd = NULL;
+    return NULL;
+}
+
+void process_cmd(char *cmd_str, size_t len) {
     
 }
 
@@ -133,6 +184,7 @@ void process_raw_data(Conn_t *conn) {
         ptr += len;
 
         printf("    sr: %d cmd :%s\n", n, data);
+        parse_cmd(data, len);
     }
 
     memset(conn->rbuf, 0, K_MAX_MSG);
