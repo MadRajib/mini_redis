@@ -15,7 +15,7 @@
 #include "list.h"
 
 #define MAX_EVENTS 10
-struct epoll_event ev, events[MAX_EVENTS];
+#define MAX_CMD_IN_REQUEST 5
 
 enum {
     STATE_REQ=0, /*while reading*/
@@ -26,6 +26,8 @@ enum {
     CMD_DEL=1,
     CMD_GET=3,
 };
+
+struct epoll_event ev, events[MAX_EVENTS];
 
 typedef struct {
     int fd;
@@ -45,9 +47,23 @@ typedef struct {
     struct list_head node;
 } db_item_t;
 
-unsigned int db_item_count = 0;
+/* code eg set del get , char key, val char*/
+typedef struct{
+    uint32_t cmd_code;
+    uint32_t key;
+    uint32_t value;
+}Cmd_t;
+
 struct list_head conn_list = LIST_INIT(conn_list);
 struct list_head in_mem_db = LIST_INIT(in_mem_db);
+
+unsigned int db_item_count = 0;
+
+int c_io_err(int code) {
+    if (code <= 0)
+        fprintf(stderr, "reading 0 or less bytes erro: %d\n", errno);
+    return code;
+}
 
 static int accept_new_conn(int connfd){
     
@@ -82,21 +98,6 @@ static int accept_new_conn(int connfd){
     return fd;
 }
 
-int c_io_err(int code) {
-    if (code <= 0)
-        fprintf(stderr, "reading 0 or less bytes erro: %d\n", errno);
-    return code;
-}
-
-#define MAX_CMD_IN_REQUEST 5
-
-/* code eg set del get , char key, val char*/
-typedef struct{
-    uint32_t cmd_code;
-    uint32_t key;
-    uint32_t value;
-}Cmd_t;
-
 uint32_t get_cmd_code(char *code) {
     if(strcmp(code, "GET") == 0) 
         return CMD_GET;
@@ -106,6 +107,71 @@ uint32_t get_cmd_code(char *code) {
         return CMD_SET;
     else 
         return -1;
+}
+
+
+void print_db_items() {
+    db_item_t *db_item;
+    struct list_head *item = NULL; 
+    list_for_each(item , &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        printf("key: %d val: %d ; ", db_item->key, db_item->val);
+    }
+    printf("1\n");
+}
+
+void add_to_db(uint32_t key, uint32_t val) {
+
+    printf("%s\n",__func__);
+    
+    db_item_t *item = malloc(sizeof(db_item_t));
+    item->id = ++db_item_count;
+    item->key = key;
+    item->val = val;
+    list_add(&in_mem_db, &item->node);
+    print_db_items();
+}
+
+db_item_t * get_from_db(uint32_t key) {
+    printf("%s\n",__func__);
+
+    struct list_head *item;
+    struct list_head *next;
+    db_item_t *db_item;
+    list_for_each_safe(item, next, &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        if (db_item->key == key) {
+            return db_item;
+        }
+    }
+    print_db_items();
+    return NULL;
+}
+
+void del_from_db(uint32_t key) {
+
+    printf("%s\n",__func__);
+
+    struct list_head *item;
+    struct list_head *next;
+    db_item_t *db_item;
+
+
+    list_for_each_safe(item, next, &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        if (db_item->key == key) {
+            list_del(&db_item->node);
+            free(db_item);
+        }
+    }
+    
+    print_db_items();
+
+}
+
+void mod_in_db(uint32_t key, uint32_t val) {
+    printf("%s\n",__func__);
+
 }
 
 /*
@@ -150,69 +216,18 @@ ERROR:
     cmd = NULL;
     return NULL;
 }
-
-void print_db_items() {
-    db_item_t *db_item;
-    struct list_head *item = NULL; 
-    list_for_each(item , &in_mem_db) {
-        db_item = container_of(item, db_item_t, node);
-        printf("key: %d val: %d ; ", db_item->key, db_item->val);
-    }
-    printf("1\n");
-}
-
-void add_to_db(uint32_t key, uint32_t val) {
-
-    printf("%s\n",__func__);
-    
-    db_item_t *item = malloc(sizeof(db_item_t));
-    item->id = ++db_item_count;
-    item->key = key;
-    item->val = val;
-    list_add(&in_mem_db, &item->node);
-    print_db_items();
-}
-
-void get_from_db(uint32_t key) {
-    
-    printf("%s\n",__func__);
-    
-}
-
-void del_from_db(uint32_t key) {
-
-    printf("%s\n",__func__);
-
-    struct list_head *item;
-    struct list_head *next;
-    db_item_t *db_item;
-
-
-    list_for_each_safe(item, next, &in_mem_db) {
-        db_item = container_of(item, db_item_t, node);
-        if (db_item->key == key) {
-            list_del(&db_item->node);
-            free(db_item);
-        }
-    }
-    
-    print_db_items();
-
-}
-
-void mod_in_db(uint32_t key, uint32_t val) {
-    
-    printf("%s\n",__func__);
-
-}
-
 void process_cmd(Cmd_t *cmd) {
     printf("%s\n",__func__);
-
-   switch (cmd->cmd_code) {
+    
+    switch (cmd->cmd_code) {
         case CMD_GET:
-            get_from_db(cmd->key);
+        {
+            db_item_t * item;
+            item = get_from_db(cmd->key);
+            if (item != NULL)
+                cmd->value =  item->val; 
             break;
+        }
         case CMD_SET:
             add_to_db(cmd->key, cmd->value);
             break;
