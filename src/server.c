@@ -40,11 +40,12 @@ typedef struct {
 
 typedef struct {
     uint32_t id;
-    uint8_t key[80];
-    uint8_t val[80];
+    uint32_t key;
+    uint32_t val;
     struct list_head node;
 } db_item_t;
 
+unsigned int db_item_count = 0;
 struct list_head conn_list = LIST_INIT(conn_list);
 struct list_head in_mem_db = LIST_INIT(in_mem_db);
 
@@ -97,21 +98,24 @@ typedef struct{
 }Cmd_t;
 
 uint32_t get_cmd_code(char *code) {
-    if(strcmp(code, "GET")) 
+    if(strcmp(code, "GET") == 0) 
         return CMD_GET;
-    else if(strcmp(code, "DEL"))
+    else if(strcmp(code, "DEL") == 0)
         return CMD_DEL;
-    else if(strcmp(code, "SET"))
+    else if(strcmp(code, "SET") == 0)
         return CMD_SET;
     else 
         return -1;
 }
 
+/*
 void print_cmd(Cmd_t *cmd){
     printf("cmd : code:%d\n", cmd->cmd_code);
     printf("cmd : key:%d\n", cmd->key);
     printf("cmd : val:%d\n", cmd->value);
 }
+
+*/
 
 Cmd_t *parse_cmd(char *cmd_str, size_t len) {
     char *cmd_ptr = NULL;
@@ -140,7 +144,6 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
         cmd_ptr = strtok_r(NULL, delim, &saveptr);
         count++;
     }
-    print_cmd(cmd);
     return cmd;
 ERROR:
     free(cmd);
@@ -148,23 +151,48 @@ ERROR:
     return NULL;
 }
 
+void print_db_items() {
+    db_item_t *db_item;
+    struct list_head *item = NULL; 
+    list_for_each(item , &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        printf("key: %d val: %d ; ", db_item->key, db_item->val);
+    }
+    printf("1\n");
+}
+
 void add_to_db(uint32_t key, uint32_t val) {
 
+    printf("%s\n",__func__);
+    
+    db_item_t *item = malloc(sizeof(db_item_t));
+    item->id = ++db_item_count;
+    item->key = key;
+    item->val = val;
+    list_add(&in_mem_db, &item->node);
+    print_db_items();
 }
 
 void get_from_db(uint32_t key) {
     
+    printf("%s\n",__func__);
+    
 }
 
 void del_from_db(uint32_t key) {
+    
+    printf("%s\n",__func__);
 
 }
 
 void mod_in_db(uint32_t key, uint32_t val) {
+    
+    printf("%s\n",__func__);
 
 }
 
 void process_cmd(Cmd_t *cmd) {
+    printf("%s\n",__func__);
 
    switch (cmd->cmd_code) {
         case CMD_GET:
@@ -213,11 +241,9 @@ void process_raw_data(Conn_t *conn) {
         data[len] = '\0';
         ptr += len;
 
-        printf("    sr: %d cmd :%s\n", n, data);
         cmd = parse_cmd(data, len);
-        if (cmd != NULL) {
+        if (cmd != NULL)
             process_cmd(cmd);
-        }
     }
 
     memset(conn->rbuf, 0, K_MAX_MSG);
