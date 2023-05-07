@@ -66,13 +66,11 @@ Result_t get_from_db(uint32_t key) {
             result.val = db_item->val;
             result.id = db_item->id;
             result.ret = 0;
-            goto RET;
+            return result;
         }
     }
-
-    result.ret = -ERR_INVALID_KEY;
-RET:
     print_db_items();
+    result.ret = -ERR_INVALID_KEY;
     return result;
 }
 

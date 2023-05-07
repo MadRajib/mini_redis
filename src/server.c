@@ -148,24 +148,20 @@ ERROR:
 
 void process_cmd(Cmd_t *cmd) {
     printf("%s\n",__func__);
-    
+    Result_t ret = {-1};
+     
     switch (cmd->cmd_code) {
         case CMD_GET:
-        {
-            db_item_t * item;
-            item = get_from_db(cmd->key);
-            if (item != NULL)
-                cmd->value =  item->val; 
+            ret = get_from_db(cmd->key);
             break;
-        }
-        case CMD_SET:
-            add_to_db(cmd->key, cmd->value);
+        case CMD_SET: 
+            ret = add_to_db(cmd->key, cmd->value);
             break;
         case CMD_DEL:
-            del_from_db(cmd->key);
+            ret = del_from_db(cmd->key);
             break;
         case CMD_MOD:
-            mod_in_db(cmd->key, cmd->value);
+            ret = mod_in_db(cmd->key, cmd->value);
             break;
         default:
             fprintf(stderr, "ERROR: Invalid cmd code %d", cmd->cmd_code);

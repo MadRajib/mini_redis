@@ -17,10 +17,16 @@ typedef struct {
     struct list_head node;
 } db_item_t;
 
+typedef struct {
+    int ret; 
+    uint32_t id;
+    uint32_t val;
+} Result_t;
+
 void print_db_items();
-void add_to_db(uint32_t key, uint32_t val);
-db_item_t * get_from_db(uint32_t key);
-void del_from_db(uint32_t key);
-void mod_in_db(uint32_t key, uint32_t val);
+Result_t add_to_db(uint32_t key, uint32_t val);
+Result_t get_from_db(uint32_t key);
+Result_t del_from_db(uint32_t key);
+Result_t mod_in_db(uint32_t key, uint32_t val);
 
 #endif
