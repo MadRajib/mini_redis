@@ -43,6 +43,7 @@ int add_cmd(char *buf, char *cmd) {
 
 static int send_cmds(int fd, char *text) {
     char wbuf[K_MAX_MSG];
+    uint8_t rbuf[K_MAX_MSG];
     char *ptr = NULL;
     char *cmd_ptr = NULL;
     char *saveptr = NULL;
@@ -71,6 +72,23 @@ static int send_cmds(int fd, char *text) {
     ret = write_full(fd, wbuf, pkt_len);
     if(ret)
         return ret;
+    
+    ret = read(fd, rbuf, K_MAX_MSG);
+    if (ret <= 0) {
+        printf("read() error %d\n", errno);
+        return ret;
+    }
+    
+    uint8_t *rptr = rbuf;
+    nstrs = *(uint8_t *)rptr;
+    rptr += sizeof(uint8_t);
+    printf("%d -> ",nstrs);
+    for(int i =0; i < nstrs ;i++) {
+        printf("%d:", *(int*)rptr);
+        rptr+= sizeof(int);
+        printf("%ul |", *(uint32_t*)rptr);
+        rptr+= sizeof(uint32_t);
+    }
 
     return 0;
 }
@@ -135,15 +153,10 @@ int main(int argc, char **argv) {
     
     // mutlitple requests
     char test[80];
-    strcpy(test, "SET 1 12;SET 2 15;DEL 1;");
+    strcpy(test, ";SET 1 12;GET 1;");
 
     int32_t err = send_cmds(fd, test);
     if(err) goto L_DONE;
-
-    err = query(fd, "hello2");
-    if(err) goto L_DONE;
-
-    err = query(fd, "hello3");
 
 L_DONE:
     close(fd);

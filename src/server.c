@@ -47,6 +47,7 @@ typedef struct{
     uint32_t cmd_code;
     uint32_t key;
     uint32_t value;
+    int ret;
 }Cmd_t;
 
 struct list_head conn_list = LIST_INIT(conn_list);
@@ -122,7 +123,7 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
 
     cmd_ptr = strtok_r(cmd_str, delim, &saveptr);
     while (cmd_ptr!= NULL) {
-        printf("%s\n", cmd_ptr);
+        //printf("%s\n", cmd_ptr);
         switch(count) {
             case 0:
                 cmd->cmd_code = get_cmd_code(cmd_ptr);
@@ -153,6 +154,7 @@ void process_cmd(Cmd_t *cmd) {
     switch (cmd->cmd_code) {
         case CMD_GET:
             ret = get_from_db(cmd->key);
+            cmd->value = ret.val;
             break;
         case CMD_SET: 
             ret = add_to_db(cmd->key, cmd->value);
@@ -164,8 +166,11 @@ void process_cmd(Cmd_t *cmd) {
             ret = mod_in_db(cmd->key, cmd->value);
             break;
         default:
+            ret.ret = -1;
             fprintf(stderr, "ERROR: Invalid cmd code %d", cmd->cmd_code);
-    } 
+    }
+
+    cmd->ret = ret.ret;
 }
 
 void process_raw_data(Conn_t *conn) {
@@ -173,9 +178,11 @@ void process_raw_data(Conn_t *conn) {
     uint8_t nstrs = 0; /* to store number of strings*/
     uint8_t len = 0;  /* to store len of each string*/
     uint8_t *ptr = NULL;
+    uint8_t *wptr = NULL;
     char data[80];
     Cmd_t *cmd;
-
+    Result_t result;
+    result.ret = -1;
     /*
      * nstr : len1 : str1: len2: str2:.... :lenn: strn
      */
@@ -190,7 +197,12 @@ void process_raw_data(Conn_t *conn) {
     assert(nstrs <= MAX_CMD_IN_REQUEST);
     ptr += sizeof(uint8_t);
 
-    printf("Number of cmds : %d\n", nstrs);
+    //printf("Number of cmds : %d\n", nstrs);
+    wptr = conn->wbuf;
+    conn->wbuf_size = 0;
+    memset(conn->wbuf, 0, K_MAX_MSG);
+    wptr += sizeof(uint8_t);
+    conn->wbuf_size += sizeof(uint8_t);
 
     for (int n = 0; n < nstrs; n++ ){
         len = *(uint8_t *)ptr;
@@ -201,10 +213,20 @@ void process_raw_data(Conn_t *conn) {
         ptr += len;
 
         cmd = parse_cmd(data, len);
-        if (cmd != NULL)
+        if (cmd != NULL) {
+            cmd->ret = 0;
             process_cmd(cmd);
-    }
+            (*(uint8_t *)conn->wbuf)++;
 
+            memcpy(wptr, &cmd->ret, sizeof(int));
+            wptr += sizeof(int);
+            conn->wbuf_size += sizeof(int);
+
+            memcpy(wptr, &cmd->value, sizeof(uint32_t));
+            wptr += sizeof(uint32_t);
+            conn->wbuf_size += sizeof(uint32_t);
+        }
+    }
     memset(conn->rbuf, 0, K_MAX_MSG);
 }
 
@@ -250,7 +272,6 @@ void process_response_state(Conn_t *conn) {
         printf("error writing to the fd %d errno:%d\n", conn->fd, errno);
         //conn->state = STATE_END;
     }
-     conn->state = STATE_REQ;
 
     return;
 }
@@ -260,9 +281,11 @@ void process_connection_io(Conn_t *conn){
         case STATE_REQ:
             process_raw_data(conn);
             //process_request_state(conn);
+            conn->state = STATE_RES;
             break;
         case STATE_RES:
             process_response_state(conn);
+            conn->state = STATE_END;
             break;
         default:
             assert(0);
@@ -350,7 +373,7 @@ int main(int argc, char **argv) {
                 int connfd =  accept_new_conn(soc_fd);
                 if (connfd < 0)
                     continue;
-                printf("recived a connection using epoll\n");
+                //printf("recived a connection using epoll\n");
                 ev.events = EPOLLIN | EPOLLET | EPOLLERR;
                 ev.data.fd = connfd;
 
@@ -370,11 +393,11 @@ int main(int argc, char **argv) {
                     if (conn->fd == events[n].data.fd) {
                         //TODO
                         
-                        printf("recived event : %d on fd %d\n", events[n].events , conn->fd);
+                        //printf("recived event : %d on fd %d\n", events[n].events , conn->fd);
                         process_connection_io(conn);
 
                         if ( conn->state == STATE_END ) {
-                            printf("removing fd from the list\n");
+                            //printf("removing fd from the list\n");
                             list_del(&conn->node);
                             close(conn->fd);
                             free(conn);
