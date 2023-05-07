@@ -1,0 +1,5 @@
+-Wall
+-g
+-std=gnu1
+-I./include
+-lm
