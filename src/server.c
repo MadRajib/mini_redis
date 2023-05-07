@@ -285,7 +285,7 @@ void process_connection_io(Conn_t *conn){
             break;
         case STATE_RES:
             process_response_state(conn);
-            conn->state = STATE_END;
+            conn->state = STATE_REQ;
             break;
         default:
             assert(0);

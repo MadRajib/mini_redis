@@ -94,12 +94,24 @@ int main(int argc, char **argv) {
     
     // mutlitple requests
     char test[80];
-    strcpy(test, "SET 1 12;");
-
-    int32_t err = send_cmds(fd, test);
-    if(err) goto L_DONE;
+    char *buffer = NULL;
+    //strcpy(test, "SET 1 12;");
+    int ret = -1;
+    unsigned long len;
+    while (1) {
+        memset(&test, 0, sizeof(test));
+        printf("CMD >");
+        ret = getline(&buffer, &len, stdin);
+        memcpy(&test, buffer, strlen(buffer));
+        test[strlen(buffer) -1] = '\0';
+        printf("\n%s len:%d\n", test, strlen(buffer));
+        int32_t err = send_cmds(fd, test);
+        if(err) goto L_DONE;
+    }
 
 L_DONE:
+    free(buffer);
+    buffer = NULL;
     close(fd);
     return 0;
 }
