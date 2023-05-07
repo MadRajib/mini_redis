@@ -10,21 +10,6 @@
 #include <netinet/in.h>
 #include "utils.h"
 
-static void process_connection(int connfd){
-    
-    char wbuf[] = "world";
-    write(connfd, wbuf, strlen(wbuf));
-
-    char rbuf[64] = {};
-    ssize_t n = read(connfd, rbuf, sizeof(rbuf) -1);
-    if (n < 0) {
-        printf("read() error : %d\n", errno);
-        return;
-    }
-    printf("server says: %s\n", rbuf);
-
-}
-
 int add_cmd(char *buf, char *cmd) {
     
     uint8_t len = 0;
@@ -82,66 +67,22 @@ static int send_cmds(int fd, char *text) {
     uint8_t *rptr = rbuf;
     nstrs = *(uint8_t *)rptr;
     rptr += sizeof(uint8_t);
-    printf("%d -> ",nstrs);
+    printf("\n%d -> ",nstrs);
     for(int i =0; i < nstrs ;i++) {
         printf("%d:", *(int*)rptr);
         rptr+= sizeof(int);
-        printf("%ul |", *(uint32_t*)rptr);
+        printf("%ul|", *(uint32_t*)rptr);
         rptr+= sizeof(uint32_t);
     }
+    printf("\n");
 
-    return 0;
-}
-
-static int query(int fd, const char *text) {
-    int len = (int) strlen(text);
-    if (len > K_MAX_MSG) return -1;
-
-    char wbuf[4 + K_MAX_MSG];
-    memcpy(wbuf, &len, 4);
-    memcpy(&wbuf[4], text, len);
-    int ret = write_full(fd, wbuf, 4 + len);
-
-    if(ret) {
-        return ret;
-    }
-
-    char rbuf[4 + K_MAX_MSG +1];
-    errno = 0;
-    ret = read_full(fd, rbuf, 4);
-    if(ret) {
-        if(errno == 0)
-            printf("EOF\n");
-        else
-            printf("read() error\n");
-
-        return ret;
-    }
-
-    memcpy(&len, rbuf, 4);
-    if(len > K_MAX_MSG) {
-        printf("Too Long\n");
-        return -1;
-    }
-
-    ret = read_full(fd, &rbuf[4], len);
-    if (ret) {
-        printf("read() error");
-        return ret;
-    }
-
-    rbuf[4 + len] = '\0';
-    printf("server says:%s\n", &rbuf[4]);
     return 0;
 }
 
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    int val = 1;
-    int ret;
     struct sockaddr_in addr = {};
-
 
     int fd = cerr(socket(AF_INET, SOCK_STREAM, 0));
 
@@ -153,7 +94,7 @@ int main(int argc, char **argv) {
     
     // mutlitple requests
     char test[80];
-    strcpy(test, ";SET 1 12;GET 1;");
+    strcpy(test, "SET 1 12;");
 
     int32_t err = send_cmds(fd, test);
     if(err) goto L_DONE;
