@@ -173,7 +173,7 @@ void process_cmd(Cmd_t *cmd) {
     cmd->ret = ret.ret;
 }
 
-void process_raw_data(Conn_t *conn) {
+int process_raw_data(Conn_t *conn) {
     int ret;
     uint8_t nstrs = 0; /* to store number of strings*/
     uint8_t len = 0;  /* to store len of each string*/
@@ -188,8 +188,7 @@ void process_raw_data(Conn_t *conn) {
      */
     ret = c_io_err(read(conn->fd, conn->rbuf, K_MAX_MSG));
     if (ret <= 0) {
-        conn->state = STATE_END;
-        return;
+        return -1;
     }
 
     ptr = conn->rbuf;
@@ -228,64 +227,37 @@ void process_raw_data(Conn_t *conn) {
         }
     }
     memset(conn->rbuf, 0, K_MAX_MSG);
+    return 0;
 }
 
-void process_request_state(Conn_t *conn) { 
-    pkt_t req, resp;
-
-    ssize_t ret = read(conn->fd, conn->rbuf, LEN_SIZE + K_MAX_MSG + 1);
-    if (ret <= 0) {
-        fprintf(stderr, "reading 0 bytes\n");
-        conn->state = STATE_END;
-        return;
-    }
-
-    memcpy(&req.len, conn->rbuf, LEN_SIZE);
-
-    if(req.len > K_MAX_MSG) {
-        printf("Too long mgs %d\n", req.len);
-        return;
-    }
-
-    memcpy(&req.msg, conn->rbuf + LEN_SIZE, req.len);
-
-    req.msg[req.len] = '\0';
-    printf("client says: %s\n", req.msg);
-
-
-    const char reply[] = "world";
-    int len = (int)strlen(reply);
-    memcpy(conn->wbuf, &len, 4);
-    memcpy(conn->wbuf + 4, reply, len);
-    conn->wbuf_size = 4 + len;
-
-    conn->state = STATE_RES;
-
-    return;
-
-}
-
-void process_response_state(Conn_t *conn) { 
+int process_response_state(Conn_t *conn) { 
     int ret;
     ret = write_full(conn->fd, conn->wbuf, conn->wbuf_size);
     if (ret < 0) {
         printf("error writing to the fd %d errno:%d\n", conn->fd, errno);
-        //conn->state = STATE_END;
+        return -1;
     }
-
-    return;
+    return 0;
 }
 
 void process_connection_io(Conn_t *conn){
+    int ret = 0;
     switch (conn->state ){
         case STATE_REQ:
-            process_raw_data(conn);
+            ret = process_raw_data(conn);
             //process_request_state(conn);
-            conn->state = STATE_RES;
+            if (ret < 0)
+                conn->state = STATE_END;
+            else
+                conn->state = STATE_REQ;
+
             break;
         case STATE_RES:
             process_response_state(conn);
-            conn->state = STATE_REQ;
+            if (ret < 0)
+                conn->state = STATE_END;
+            else
+                conn->state = STATE_RES;
             break;
         default:
             assert(0);
@@ -347,7 +319,7 @@ int main(int argc, char **argv) {
         list_for_each_safe(item, next, &conn_list) {
             conn = container_of(item, Conn_t, node);
             if (conn && (conn->fd > -1)) {
-                ev.events = (conn->state == STATE_REQ) ? EPOLLIN : EPOLLOUT | EPOLLET ;
+                ev.events = ((conn->state == STATE_REQ) ? EPOLLIN : EPOLLOUT);
                 ev.data.fd = conn->fd;
                 if (epoll_ctl(epollfd, EPOLL_CTL_MOD, conn->fd, &ev) == -1) {
                     fprintf(stderr, "epoll_ctl:  EPOLL_CTL_MOD failed for fd:%d errno %d\n", conn->fd, errno);
@@ -374,7 +346,7 @@ int main(int argc, char **argv) {
                 if (connfd < 0)
                     continue;
                 //printf("recived a connection using epoll\n");
-                ev.events = EPOLLIN | EPOLLET | EPOLLERR;
+                ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connfd;
 
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) == -1) {
@@ -397,7 +369,7 @@ int main(int argc, char **argv) {
                         process_connection_io(conn);
 
                         if ( conn->state == STATE_END ) {
-                            //printf("removing fd from the list\n");
+                            printf("removing fd from the list\n");
                             list_del(&conn->node);
                             close(conn->fd);
                             free(conn);

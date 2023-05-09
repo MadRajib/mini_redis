@@ -33,7 +33,7 @@ static int send_cmds(int fd, char *text) {
     char *cmd_ptr = NULL;
     char *saveptr = NULL;
     const char delim[] = ";";
-    uint16_t pkt_len;
+    uint16_t pkt_len = 0;
     int ret;
     uint8_t nstrs = 0;
 
@@ -82,6 +82,7 @@ static int send_cmds(int fd, char *text) {
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
+    int ret;
     struct sockaddr_in addr = {};
 
     int fd = cerr(socket(AF_INET, SOCK_STREAM, 0));
@@ -95,8 +96,8 @@ int main(int argc, char **argv) {
     // mutlitple requests
     char test[80];
     char *buffer = NULL;
+    ret = -1;
     //strcpy(test, "SET 1 12;");
-    int ret = -1;
     unsigned long len;
     while (1) {
         memset(&test, 0, sizeof(test));
@@ -104,7 +105,7 @@ int main(int argc, char **argv) {
         ret = getline(&buffer, &len, stdin);
         memcpy(&test, buffer, strlen(buffer));
         test[strlen(buffer) -1] = '\0';
-        printf("\n%s len:%d\n", test, strlen(buffer));
+        printf("\n%s len:%ld\n", test, strlen(buffer));
         int32_t err = send_cmds(fd, test);
         if(err) goto L_DONE;
     }
