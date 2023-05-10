@@ -63,12 +63,14 @@ typedef struct{
 struct list_head conn_list = LIST_INIT(conn_list);
 
 int c_io_err(int code) {
+    printf("%s\n",__func__);
     if (code <= 0)
         fprintf(stderr, "reading 0 or less bytes erro: %d\n", errno);
     return code;
 }
 
 static int accept_new_conn(int connfd){
+    printf("%s\n",__func__);
     
     struct sockaddr_in client_addr = {};
     socklen_t socklen = sizeof(client_addr);
@@ -102,6 +104,7 @@ static int accept_new_conn(int connfd){
 }
 
 uint32_t get_cmd_code(char *code) {
+    printf("%s\n",__func__);
     if(strcmp(code, "GET") == 0) 
         return CMD_GET;
     else if(strcmp(code, "DEL") == 0)
@@ -124,6 +127,7 @@ void print_cmd(Cmd_t *cmd){
 */
 
 Cmd_t *parse_cmd(char *cmd_str, size_t len) {
+    printf("%s\n",__func__);
     char *cmd_ptr = NULL;
     char *saveptr = NULL;
     char *delim = " ";
@@ -133,14 +137,22 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
     memset(cmd, 0, sizeof(Cmd_t));
     
     uint8_t valid_code = 0;
+    char *cmd_parts[3] = {NULL, NULL, NULL};
 
     cmd_ptr = strtok_r(cmd_str, delim, &saveptr);
     while (cmd_ptr!= NULL) {
+        count++;
+        if(count > 3)
+            goto ERROR;
+
+        printf("count: %d\n",count);
+        cmd_parts[count -1] = cmd_ptr;
         //printf("%s\n", cmd_ptr);
+        /*
         switch(count) {
             case 0:
                 ret = get_cmd_code(cmd_ptr);
-                if (ret > 0) {
+                if (ret >= 0) {
                     cmd->cmd_code = ret;
                     valid_code |= VALID_CMD_CODE;
                 }
@@ -162,15 +174,47 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
             default:
                 goto ERROR;
         }
+        */
         cmd_ptr = strtok_r(NULL, delim, &saveptr);
-        count++;
     }
 
-    if (VALID_CMD != valid_code)
+    if(count < 1 || !cmd_parts[0])
         goto ERROR;
 
+    ret = get_cmd_code(cmd_parts[0]);
+    if (ret < 0)
+        goto ERROR;
+    cmd->cmd_code = ret;
+
+    if(count < 2 || !cmd_parts[1])
+        goto ERROR;
+    ret = atoll(cmd_parts[1]);
+    if (ret == 0)
+        goto ERROR;
+    cmd->key = ret;
+
+    if( cmd->cmd_code == CMD_SET || cmd->cmd_code == CMD_MOD ) {
+        if(count < 3 || !cmd_parts[2])
+            goto ERROR;
+        
+        ret = atoll(cmd_parts[2]);
+        if (ret == 0)
+            goto ERROR;
+        cmd->value = ret;
+    } else if(count > 2 || count > 3){
+        goto ERROR;
+    }
+
+    printf("count %d\n", count);
+/*
+    if (VALID_CMD != valid_code) {
+        fprintf(stderr,"invalid cmd error:%d\n", valid_code);
+        goto ERROR;
+    }
+*/
     return cmd;
 ERROR:
+    fprintf(stderr,"invalid cmd error:%d\n", ret);
     free(cmd);
     cmd = NULL;
     return NULL;
@@ -203,6 +247,7 @@ void process_cmd(Cmd_t *cmd) {
 }
 
 int process_raw_data(Conn_t *conn) {
+    printf("%s\n",__func__);
     int ret;
     uint32_t read_len;
     uint8_t nstrs = 0; /* to store number of strings*/
@@ -285,9 +330,12 @@ int process_raw_data(Conn_t *conn) {
             memcpy(wptr, &cmd->value, sizeof(uint32_t));
             wptr += sizeof(uint32_t);
             conn->wbuf_size += sizeof(uint32_t);
+
         } else {
             printf("Invalid cmd reacived!\n");
         }
+        free(cmd);
+        cmd = NULL;
     }
 
 ERROR:
@@ -297,6 +345,7 @@ ERROR:
 }
 
 int process_response_state(Conn_t *conn) { 
+    printf("%s\n",__func__);
     int ret;
     ret = write_full(conn->fd, conn->wbuf, conn->wbuf_size);
     if (ret < 0) {
@@ -307,6 +356,7 @@ int process_response_state(Conn_t *conn) {
 }
 
 void process_connection_io(Conn_t *conn){
+    printf("%s\n",__func__);
     int ret = 0;
     switch (conn->state ){
         case STATE_REQ:
