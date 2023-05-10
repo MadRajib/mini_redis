@@ -27,6 +27,16 @@ enum {
     CMD_DEL=1,
     CMD_GET=3,
     CMD_MOD=4,
+
+    INAVLID_READ        =0,
+    INAVLID_NSTR        =1,
+    INAVLID_CMD_LEN     =2,
+    INAVLID_CMD_BYTE    =3,
+
+    VALID_CMD_CODE  =1,
+    VALID_CMD_KEY   =2,
+    VALID_CMD_VALUE =4,
+    VALID_CMD = 7,
 };
 
 struct epoll_event ev, events[MAX_EVENTS];
@@ -119,20 +129,35 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
     char *delim = " ";
     Cmd_t *cmd = malloc(sizeof(Cmd_t));
     int count = 0;
+    int ret = 0;
     memset(cmd, 0, sizeof(Cmd_t));
+    
+    uint8_t valid_code = 0;
 
     cmd_ptr = strtok_r(cmd_str, delim, &saveptr);
     while (cmd_ptr!= NULL) {
         //printf("%s\n", cmd_ptr);
         switch(count) {
             case 0:
-                cmd->cmd_code = get_cmd_code(cmd_ptr);
+                ret = get_cmd_code(cmd_ptr);
+                if (ret > 0) {
+                    cmd->cmd_code = ret;
+                    valid_code |= VALID_CMD_CODE;
+                }
                 break;
             case 1:
-                cmd->key = atoll(cmd_ptr);
+                ret = atoll(cmd_ptr);
+                if (ret !=0 ) {
+                    cmd->key = ret;
+                    valid_code |= VALID_CMD_KEY;
+                }
                 break;
             case 2:
-                cmd->value = atoll(cmd_ptr);
+                ret = atoll(cmd_ptr);
+                if (ret !=0 ) {
+                    cmd->key = ret;
+                    valid_code |= VALID_CMD_VALUE;
+                }
                 break;
             default:
                 goto ERROR;
@@ -140,6 +165,10 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
         cmd_ptr = strtok_r(NULL, delim, &saveptr);
         count++;
     }
+
+    if (VALID_CMD != valid_code)
+        goto ERROR;
+
     return cmd;
 ERROR:
     free(cmd);
@@ -175,6 +204,7 @@ void process_cmd(Cmd_t *cmd) {
 
 int process_raw_data(Conn_t *conn) {
     int ret;
+    uint32_t read_len;
     uint8_t nstrs = 0; /* to store number of strings*/
     uint8_t len = 0;  /* to store len of each string*/
     uint8_t *ptr = NULL;
@@ -186,14 +216,27 @@ int process_raw_data(Conn_t *conn) {
     /*
      * nstr : len1 : str1: len2: str2:.... :lenn: strn
      */
+    read_len = 0;
     ret = c_io_err(read(conn->fd, conn->rbuf, K_MAX_MSG));
     if (ret <= 0) {
-        return -1;
+        ret = -INAVLID_READ;
+        goto ERROR;
     }
+    conn->rbuf_size = ret;
+
+    printf("read data %d\n", read_len);
 
     ptr = conn->rbuf;
+    
+    read_len +=sizeof(uint8_t);
+    if (read_len > conn->rbuf_size) {
+        ret = -INAVLID_NSTR;
+        goto ERROR;
+    }
+
     nstrs = *(uint8_t *)ptr;
     assert(nstrs <= MAX_CMD_IN_REQUEST);
+    
     ptr += sizeof(uint8_t);
 
     //printf("Number of cmds : %d\n", nstrs);
@@ -204,9 +247,27 @@ int process_raw_data(Conn_t *conn) {
     conn->wbuf_size += sizeof(uint8_t);
 
     for (int n = 0; n < nstrs; n++ ){
+        
+        read_len +=sizeof(uint8_t); 
+        if (read_len > conn->rbuf_size) {
+            ret = -INAVLID_CMD_LEN;
+            goto ERROR;
+        }
+
         len = *(uint8_t *)ptr;
-        assert(len > 0);
+        if (len < 0) { 
+            ret = -INAVLID_CMD_LEN;
+            goto ERROR;
+        }
+
         ptr += sizeof(uint8_t);
+    
+        read_len += len; 
+        if (read_len > conn->rbuf_size) {
+            ret = -INAVLID_CMD_BYTE;
+            goto ERROR;
+        }
+
         memcpy(&data, ptr, len);
         data[len] = '\0';
         ptr += len;
@@ -224,10 +285,15 @@ int process_raw_data(Conn_t *conn) {
             memcpy(wptr, &cmd->value, sizeof(uint32_t));
             wptr += sizeof(uint32_t);
             conn->wbuf_size += sizeof(uint32_t);
+        } else {
+            printf("Invalid cmd reacived!\n");
         }
     }
+
+ERROR:
     memset(conn->rbuf, 0, K_MAX_MSG);
-    return 0;
+    conn->rbuf_size = 0;
+    return ret;
 }
 
 int process_response_state(Conn_t *conn) { 
@@ -246,10 +312,10 @@ void process_connection_io(Conn_t *conn){
         case STATE_REQ:
             ret = process_raw_data(conn);
             //process_request_state(conn);
-            if (ret < 0)
+            if (ret == INAVLID_READ)
                 conn->state = STATE_END;
             else
-                conn->state = STATE_REQ;
+                conn->state = STATE_RES;
 
             break;
         case STATE_RES:
@@ -257,7 +323,7 @@ void process_connection_io(Conn_t *conn){
             if (ret < 0)
                 conn->state = STATE_END;
             else
-                conn->state = STATE_RES;
+                conn->state = STATE_REQ;
             break;
         default:
             assert(0);
