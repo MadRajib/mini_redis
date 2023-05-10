@@ -32,11 +32,6 @@ enum {
     INAVLID_NSTR        =1,
     INAVLID_CMD_LEN     =2,
     INAVLID_CMD_BYTE    =3,
-
-    VALID_CMD_CODE  =1,
-    VALID_CMD_KEY   =2,
-    VALID_CMD_VALUE =4,
-    VALID_CMD = 7,
 };
 
 struct epoll_event ev, events[MAX_EVENTS];
@@ -126,66 +121,82 @@ void print_cmd(Cmd_t *cmd){
 
 */
 
-Cmd_t *parse_cmd(char *cmd_str, size_t len) {
+enum {
+    INVALID_CMD=1,
+    INVALID_CMD_CODE=2,
+    INVALID_CMD_KEY=3,
+    INVALID_CMD_VALUE=4,
+};
+void parse_cmd(char *cmd_str, size_t len, Cmd_t *cmd) {
     printf("%s\n",__func__);
     char *cmd_ptr = NULL;
     char *saveptr = NULL;
     char *delim = " ";
-    Cmd_t *cmd = malloc(sizeof(Cmd_t));
+    //Cmd_t *cmd = malloc(sizeof(Cmd_t));
     int count = 0;
     int ret = 0;
-    memset(cmd, 0, sizeof(Cmd_t));
     
-    uint8_t valid_code = 0;
     char *cmd_parts[3] = {NULL, NULL, NULL};
 
     cmd_ptr = strtok_r(cmd_str, delim, &saveptr);
     while (cmd_ptr!= NULL) {
         count++;
-        if(count > 3)
-            goto ERROR;
-
+        if(count > 3) {
+            cmd->ret = -INVALID_CMD;
+            return;
+        } 
         cmd_parts[count -1] = cmd_ptr;
         cmd_ptr = strtok_r(NULL, delim, &saveptr);
     }
 
-    if(count < 1 || !cmd_parts[0])
-        goto ERROR;
+    if(count < 1 || !cmd_parts[0]){
+        cmd->ret = -INVALID_CMD;
+        return;
+    }
 
     ret = get_cmd_code(cmd_parts[0]);
-    if (ret < 0)
-        goto ERROR;
+    if (ret < 0) { 
+        cmd->ret = -INVALID_CMD_CODE;
+        return;
+    }
     cmd->cmd_code = ret;
 
-    if(count < 2 || !cmd_parts[1])
-        goto ERROR;
+    if(count < 2 || !cmd_parts[1]) {
+        cmd->ret = -INVALID_CMD;
+        return; 
+    }
+
     ret = atoll(cmd_parts[1]);
-    if (ret == 0)
-        goto ERROR;
+    if (ret == 0) { 
+        cmd->ret = -INVALID_CMD_KEY;
+        return;
+    }
     cmd->key = ret;
 
     if( cmd->cmd_code == CMD_SET || cmd->cmd_code == CMD_MOD ) {
-        if(count < 3 || !cmd_parts[2])
-            goto ERROR;
+        if(count < 3 || !cmd_parts[2]) {
+            cmd->ret = -INVALID_CMD;
+            return;
+        }
         
         ret = atoll(cmd_parts[2]);
-        if (ret == 0)
-            goto ERROR;
+        if (ret == 0) {
+            cmd->ret = -INVALID_CMD_VALUE;
+            return;
+        }
         cmd->value = ret;
-    } else if(count > 2 || count > 3){
-        goto ERROR;
+    } else if(count > 2 || count > 3){ 
+        cmd->ret = -INVALID_CMD;
+        return;
     }
 
-    return cmd;
-ERROR:
-    fprintf(stderr,"invalid cmd error:%d\n", ret);
-    free(cmd);
-    cmd = NULL;
-    return NULL;
 }
 
 void process_cmd(Cmd_t *cmd) {
     printf("%s\n",__func__);
+    if (cmd->ret < 0)
+        return;
+
     Result_t ret = {-1};
      
     switch (cmd->cmd_code) {
@@ -280,24 +291,25 @@ int process_raw_data(Conn_t *conn) {
         memcpy(&data, ptr, len);
         data[len] = '\0';
         ptr += len;
+        
+        ret = -1;
+        cmd = (Cmd_t *)malloc(sizeof(Cmd_t));
+        memset(cmd, 0, sizeof(Cmd_t));
 
-        cmd = parse_cmd(data, len);
-        if (cmd != NULL) {
-            cmd->ret = 0;
-            process_cmd(cmd);
-            (*(uint8_t *)conn->wbuf)++;
+        parse_cmd(data, len, cmd); 
 
-            memcpy(wptr, &cmd->ret, sizeof(int));
-            wptr += sizeof(int);
-            conn->wbuf_size += sizeof(int);
+        process_cmd(cmd);
+        
+        (*(uint8_t *)conn->wbuf)++;
+            
+        memcpy(wptr, &cmd->ret, sizeof(int));
+        wptr += sizeof(int);
+        conn->wbuf_size += sizeof(int);
 
-            memcpy(wptr, &cmd->value, sizeof(uint32_t));
-            wptr += sizeof(uint32_t);
-            conn->wbuf_size += sizeof(uint32_t);
+        memcpy(wptr, &cmd->value, sizeof(uint32_t));
+        wptr += sizeof(uint32_t);
+        conn->wbuf_size += sizeof(uint32_t);
 
-        } else {
-            printf("Invalid cmd reacived!\n");
-        }
         free(cmd);
         cmd = NULL;
     }

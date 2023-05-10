@@ -10,6 +10,8 @@ SRC_DIR=src
 CFLAGS=-Wall -g -std=gnu11
 LIBS=-lm
 
+all:server client
+
 server:$(SERVER_OBJ) $(DB_OBJ) $(UTILS_OBJ)
 	$(CC) $(CFLAGS) $(SERVER_OBJ) $(DB_OBJ) $(UTILS_OBJ) -o $@ $(LIBS)
 
