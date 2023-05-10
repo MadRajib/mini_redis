@@ -145,36 +145,7 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
         if(count > 3)
             goto ERROR;
 
-        printf("count: %d\n",count);
         cmd_parts[count -1] = cmd_ptr;
-        //printf("%s\n", cmd_ptr);
-        /*
-        switch(count) {
-            case 0:
-                ret = get_cmd_code(cmd_ptr);
-                if (ret >= 0) {
-                    cmd->cmd_code = ret;
-                    valid_code |= VALID_CMD_CODE;
-                }
-                break;
-            case 1:
-                ret = atoll(cmd_ptr);
-                if (ret !=0 ) {
-                    cmd->key = ret;
-                    valid_code |= VALID_CMD_KEY;
-                }
-                break;
-            case 2:
-                ret = atoll(cmd_ptr);
-                if (ret !=0 ) {
-                    cmd->key = ret;
-                    valid_code |= VALID_CMD_VALUE;
-                }
-                break;
-            default:
-                goto ERROR;
-        }
-        */
         cmd_ptr = strtok_r(NULL, delim, &saveptr);
     }
 
@@ -205,13 +176,6 @@ Cmd_t *parse_cmd(char *cmd_str, size_t len) {
         goto ERROR;
     }
 
-    printf("count %d\n", count);
-/*
-    if (VALID_CMD != valid_code) {
-        fprintf(stderr,"invalid cmd error:%d\n", valid_code);
-        goto ERROR;
-    }
-*/
     return cmd;
 ERROR:
     fprintf(stderr,"invalid cmd error:%d\n", ret);
