@@ -192,7 +192,7 @@ void parse_cmd(char *cmd_str, size_t len, Cmd_t *cmd) {
 
 }
 
-void process_cmd(Cmd_t *cmd) {
+void process_cmd(Cmd_t *cmd, int fd) {
     printf("%s\n",__func__);
     if (cmd->ret < 0)
         return;
@@ -205,7 +205,7 @@ void process_cmd(Cmd_t *cmd) {
             cmd->value = ret.val;
             break;
         case CMD_SET: 
-            ret = add_to_db(cmd->key, cmd->value);
+            ret = add_to_db(cmd->key, cmd->value, fd);
             break;
         case CMD_DEL:
             ret = del_from_db(cmd->key);
@@ -298,7 +298,7 @@ int process_raw_data(Conn_t *conn) {
 
         parse_cmd(data, len, cmd); 
 
-        process_cmd(cmd);
+        process_cmd(cmd, conn->fd);
         
         (*(uint8_t *)conn->wbuf)++;
             

@@ -23,7 +23,7 @@ void print_db_items() {
     printf("1\n");
 }
 
-Result_t add_to_db(uint32_t key, uint32_t val) {
+Result_t add_to_db(uint32_t key, uint32_t val , uint32_t id) {
     printf("%s\n",__func__);
 
     Result_t result = {-1};
