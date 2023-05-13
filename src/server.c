@@ -32,6 +32,11 @@ enum {
     INAVLID_NSTR        =1,
     INAVLID_CMD_LEN     =2,
     INAVLID_CMD_BYTE    =3,
+
+    INVALID_CMD=1,
+    INVALID_CMD_CODE=2,
+    INVALID_CMD_KEY=3,
+    INVALID_CMD_VALUE=4,
 };
 
 struct epoll_event ev, events[MAX_EVENTS];
@@ -112,27 +117,11 @@ uint32_t get_cmd_code(char *code) {
         return -1;
 }
 
-/*
-void print_cmd(Cmd_t *cmd){
-    printf("cmd : code:%d\n", cmd->cmd_code);
-    printf("cmd : key:%d\n", cmd->key);
-    printf("cmd : val:%d\n", cmd->value);
-}
-
-*/
-
-enum {
-    INVALID_CMD=1,
-    INVALID_CMD_CODE=2,
-    INVALID_CMD_KEY=3,
-    INVALID_CMD_VALUE=4,
-};
 void parse_cmd(char *cmd_str, size_t len, Cmd_t *cmd) {
     printf("%s\n",__func__);
     char *cmd_ptr = NULL;
     char *saveptr = NULL;
     char *delim = " ";
-    //Cmd_t *cmd = malloc(sizeof(Cmd_t));
     int count = 0;
     int ret = 0;
     
