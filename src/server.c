@@ -190,17 +190,17 @@ void process_cmd(Cmd_t *cmd, int fd) {
      
     switch (cmd->cmd_code) {
         case CMD_GET:
-            ret = get_from_db(cmd->key);
+            ret = get_from_db(cmd->key, fd);
             cmd->value = ret.val;
             break;
         case CMD_SET: 
             ret = add_to_db(cmd->key, cmd->value, fd);
             break;
         case CMD_DEL:
-            ret = del_from_db(cmd->key);
+            ret = del_from_db(cmd->key, fd);
             break;
         case CMD_MOD:
-            ret = mod_in_db(cmd->key, cmd->value);
+            ret = mod_in_db(cmd->key, cmd->value, fd);
             break;
         default:
             ret.ret = -1;

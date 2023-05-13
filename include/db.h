@@ -24,10 +24,10 @@ typedef struct {
 } Result_t;
 
 void print_db_items();
-Result_t add_to_db(uint32_t key, uint32_t val, uint32_t id);
-Result_t get_from_db(uint32_t key);
-Result_t del_from_db(uint32_t key);
-Result_t mod_in_db(uint32_t key, uint32_t val);
+Result_t add_to_db(uint32_t key, uint32_t val, int id);
+Result_t get_from_db(uint32_t key, int id);
+Result_t del_from_db(uint32_t key, int id);
+Result_t mod_in_db(uint32_t key, uint32_t val, int id);
 void remove_all_recod(int fd);
 
 #endif

@@ -23,14 +23,14 @@ void print_db_items() {
     printf("1\n");
 }
 
-Result_t add_to_db(uint32_t key, uint32_t val , uint32_t id) {
+Result_t add_to_db(uint32_t key, uint32_t val , int id) {
     printf("%s\n",__func__);
 
     Result_t result = {-1};
     db_item_t *item = NULL;
 
     /*check if key is alread present*/
-    result =  get_from_db(key);
+    result =  get_from_db(key, id);
     if (!result.ret) { 
         result.ret = -ERR_KEY_PRESENT;
         goto RET;
@@ -67,7 +67,7 @@ void remove_all_recod(int fd) {
     }
 }
 
-Result_t get_from_db(uint32_t key) {
+Result_t get_from_db(uint32_t key, int fd) {
     printf("%s\n",__func__);
 
     struct list_head *item;
@@ -78,7 +78,7 @@ Result_t get_from_db(uint32_t key) {
 
     list_for_each_safe(item, next, &in_mem_db) {
         db_item = container_of(item, db_item_t, node);
-        if (db_item->key == key) {
+        if (db_item->id == fd && db_item->key == key) {
             result.val = db_item->val;
             result.id = db_item->id;
             result.ret = 0;
@@ -92,7 +92,7 @@ RET:
     return result;
 }
 
-Result_t del_from_db(uint32_t key) {
+Result_t del_from_db(uint32_t key, int fd) {
 
     printf("%s\n",__func__);
 
@@ -104,7 +104,7 @@ Result_t del_from_db(uint32_t key) {
 
     list_for_each_safe(item, next, &in_mem_db) {
         db_item = container_of(item, db_item_t, node);
-        if (db_item->key == key) {
+        if (db_item->id == fd && db_item->key == key) {
             list_del(&db_item->node);
             free(db_item);
             db_item = NULL;
@@ -119,7 +119,7 @@ RET:
     return result;
 }
 
-Result_t mod_in_db(uint32_t key, uint32_t val) {
+Result_t mod_in_db(uint32_t key, uint32_t val, int fd) {
     printf("%s\n",__func__);
 
     struct list_head *item;
@@ -129,7 +129,7 @@ Result_t mod_in_db(uint32_t key, uint32_t val) {
 
     list_for_each_safe(item, next, &in_mem_db) {
         db_item = container_of(item, db_item_t, node);
-        if (db_item->key == key) {
+        if (db_item->id == fd && db_item->key == key) {
             db_item->val = val;
             result.ret = 0;
             goto RET;
