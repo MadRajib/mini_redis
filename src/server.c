@@ -451,6 +451,7 @@ int main(int argc, char **argv) {
 
                         if ( conn->state == STATE_END ) {
                             printf("removing fd from the list\n");
+                            remove_all_recod(conn->fd);
                             list_del(&conn->node);
                             close(conn->fd);
                             free(conn);

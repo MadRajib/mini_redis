@@ -38,7 +38,7 @@ Result_t add_to_db(uint32_t key, uint32_t val , uint32_t id) {
 
     /*add to db*/
     item = malloc(sizeof(db_item_t));
-    item->id = ++db_item_count;
+    item->id = id;
     item->key = key;
     item->val = val;
 
@@ -49,6 +49,22 @@ Result_t add_to_db(uint32_t key, uint32_t val , uint32_t id) {
 
 RET:
     return result;
+}
+
+void remove_all_recod(int fd) {
+    
+    struct list_head *item;
+    struct list_head *next;
+    db_item_t *db_item;
+
+    list_for_each_safe(item, next, &in_mem_db) {
+        db_item = container_of(item, db_item_t, node);
+        if (db_item->id ==  fd) {
+            list_del(&db_item->node);
+            free(db_item);
+            db_item = NULL;
+        }
+    }
 }
 
 Result_t get_from_db(uint32_t key) {
